@@ -495,7 +495,7 @@ class Combatant {
   reset(){ const p=this.parts;
     p.jArmL.rotation.set(0,0,0); p.jArmR.rotation.set(0,0,0); p.jArmLF.rotation.set(0,0,0); p.jArmRF.rotation.set(0,0,0);
     p.jLegL.rotation.set(0,0,0); p.jLegR.rotation.set(0,0,0); p.jLegLF.rotation.set(0,0,0); p.jLegRF.rotation.set(0,0,0);
-    p.head.rotation.set(0,0,0); this.g.rotation.z=0; }
+    p.head.rotation.set(0,0,0); this.g.rotation.order='XYZ'; this.g.rotation.z=0; this.g.scale.set(1,1,1); }
 
   update(dt,foe){
     this.t+=dt; this.anim+=dt;
@@ -598,14 +598,26 @@ class Combatant {
       p.jArmR.rotation.x=-2.2+2.1*k; p.jArmRF.rotation.x=-0.3+1.3*k; // 앞으로 쭉
       p.jArmL.rotation.x=-1.1; p.jArmLF.rotation.x=-0.4; this.g.rotation.z=this.dir*0.1; }
     p.jLegL.rotation.x=0.4; p.jLegR.rotation.x=-0.3; this.faceTo(foe.x); }
-  poseRoll(dt,foe){ const p=this.parts; const k=Math.min(1,this.t/0.6); // 옆구르기 회피(무적)
-    this.invuln = this.t>0.05 && this.t<0.52;
-    this.g.position.z = Math.sin(k*Math.PI)*3.2;      // 옆(카메라 쪽)으로 굴렀다 복귀
-    this.g.position.y = Math.sin(k*Math.PI)*0.25;
-    this.g.rotation.x = -k*Math.PI*2;                 // 한 바퀴 구르기
-    p.jArmL.rotation.x=-2.3; p.jArmR.rotation.x=-2.3; // 몸 웅크림
-    p.jLegL.rotation.x=1.5; p.jLegLF.rotation.x=1.7; p.jLegR.rotation.x=1.5; p.jLegRF.rotation.x=1.7;
-    p.head.rotation.x=0.45; }
+  poseRoll(dt,foe){ const p=this.parts; const k=Math.min(1,this.t/0.6); // 옆구르기: 웅크려 땅에서 바퀴처럼 구름
+    this.invuln = k>0.06 && k<0.85;
+    const away=(Math.sign(this.x-foe.x)||1);                       // 적 반대쪽으로 회피
+    const ss=(a,b,x)=>{const q=Math.min(1,Math.max(0,(x-a)/(b-a)));return q*q*(3-2*q);};
+    const env=ss(0,0.16,k)*(1-ss(0.68,0.84,k));                    // 진입/복귀 블렌드 (후반은 일어나는 구간)
+    const th=-away*Math.PI*2*ss(0.04,0.72,k);                      // 회전은 중반에 완료
+    if(this._rollX0===undefined) this._rollX0=this.x;
+    this.g.position.x=THREE.MathUtils.clamp(this._rollX0+3.2*away*ss(0,1,k),-9,9);
+    // 월드 Z축 스핀 + 피벗 보정 + 몸 공처럼 압축 → 낮게 붙은 구르기
+    const sc=1-0.55*env; this.g.scale.set(1,sc,1);                 // 웅크림(스쿼시)
+    const c=2.55*sc, r=0.85;
+    this.g.rotation.order='ZYX'; this.g.rotation.z=th;
+    this.g.position.y=env*(r-c*Math.cos(th));
+    this.g.position.x+=env*c*Math.sin(th);
+    if(env>0.5 && Math.random()<0.3) dust(new THREE.Vector3(this.x,0.12,0),0x8a6a4a,2); // 흙먼지
+    p.jArmL.rotation.x=-1.3*env; p.jArmR.rotation.x=-1.3*env;      // 팔로 무릎 감싸안기
+    p.jArmLF.rotation.x=-1.2*env; p.jArmRF.rotation.x=-1.2*env;
+    p.jLegL.rotation.x=-1.1*env; p.jLegLF.rotation.x=2.0*env;      // 무릎을 가슴으로 (공 모양 웅크림)
+    p.jLegR.rotation.x=-1.1*env; p.jLegRF.rotation.x=2.0*env;
+    p.head.rotation.x=0.6*env; }
   poseStunned(dt){ const p=this.parts; // 기절(비틀)
     this.g.rotation.z=Math.sin(this.anim*7)*0.12; p.head.rotation.z=Math.sin(this.anim*6)*0.25; p.head.rotation.x=0.25;
     p.jArmL.rotation.x=-0.4; p.jArmR.rotation.x=-0.4; this.g.position.y=Math.abs(Math.sin(this.anim*4))*0.05; }
@@ -744,7 +756,8 @@ function startSkill(self,foe,k){ self.t=0; self._struck=false; self._hitIdx=0;
     case 'shield': self.state='shield'; self.cd.shield=2.2; self._blockDur=0.55; self.cooldown=0.6; break;
     case 'liver':  self.state='liver';  self.cd.liver=4.6;  self.cooldown=1.0; Sound.whoosh(0.7);
                    logMsg(`${self.name} 리버샷 노림!`); break;
-    case 'roll':   self.state='roll';   self.cd.roll=3.6;   self.cooldown=0.9; Sound.whoosh(1.1); logMsg(`🤸 ${self.name} 옆구르기 회피!`); break;
+    case 'roll':   self.state='roll';   self.cd.roll=3.6;   self.cooldown=0.9; self._rollX0=undefined;
+                   Sound.whoosh(1.1); logMsg(`🤸 ${self.name} 옆구르기 회피!`); break;
     case 'dash':   self.state='dash';   self.cd.dash=5.2;   self.cooldown=1.2; self.empowered=self.rage>=100;
                    if(self.empowered){ self.rage=0; announce('각성!','#ffe07a'); }
                    Sound.whoosh(1.1); logMsg(`💨 ${self.name} 대시공격!${self.empowered?' (각성)':''}`); break;
