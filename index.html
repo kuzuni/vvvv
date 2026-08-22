@@ -430,16 +430,17 @@ function makeRoman(){
   const AL=makeArm(-0.75,0.18,0.55,0.17,0.5,skin), AR=makeArm(0.75,0.18,0.55,0.17,0.5,skin);
   const bracerR=box(0.4,0.34,0.4,0xd8b24e,0.35,0.8); bracerR.position.y=-0.58; AR.jf.add(bracerR);
   const bracerL=box(0.4,0.34,0.4,0xd8b24e,0.35,0.8); bracerL.position.y=-0.58; AL.jf.add(bracerL);
-  // 방패 (몸통 좌측 마운트 — 적을 향하되 카메라 쪽으로 약간 틀어 면이 보이게)
-  const shieldMount=new THREE.Group(); shieldMount.position.set(-0.32,2.55,0.55);
-  shieldMount.rotation.set(0,0.95,0); g.add(shieldMount);
-  const shBody=new THREE.Mesh(new THREE.CylinderGeometry(0.92,0.92,0.16,32), mat(0xc0392b,0.55,0.15));
-  shBody.rotation.x=Math.PI/2; shBody.castShadow=true;                 // 원판이 +Z를 향함
-  const shRim=new THREE.Mesh(new THREE.TorusGeometry(0.92,0.09,12,32), mat(0xd8b24e,0.3,0.9,0.05)); shRim.position.z=0.02;
-  const shBoss=sph(0.2,0xf0d060,0.3,0.9,0.5); shBoss.position.z=0.15;  // 중앙 보스
-  const shCrossV=box(0.14,1.7,0.06,0xd8b24e,0.4,0.7); shCrossV.position.z=0.1;
-  const shCrossH=box(1.7,0.14,0.06,0xd8b24e,0.4,0.7); shCrossH.position.z=0.1;
-  shieldMount.add(shBody,shRim,shBoss,shCrossV,shCrossH);
+  const handR=sph(0.17,skin); handR.position.y=-0.78; AR.jf.add(handR); // 검 쥐는 오른손
+  const handL=sph(0.17,skin); handL.position.y=-0.78; AL.jf.add(handL); // 방패 잡는 왼손
+  // 방패 (왼팔뚝에 장착 — 손에 쥔 채 팔과 함께 움직임. 원판 법선=팔뚝 로컬 X축이라 팔을 굽혀도 방향 유지)
+  const shieldG=new THREE.Group(); shieldG.position.set(0.02,-0.7,0.05); shieldG.rotation.set(0,-0.5,0); AL.jf.add(shieldG);
+  const shBody=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,0.16,32), mat(0xc0392b,0.55,0.15));
+  shBody.rotation.z=Math.PI/2; shBody.castShadow=true;                 // 원판 법선 = X축
+  const shRim=new THREE.Mesh(new THREE.TorusGeometry(0.85,0.09,12,32), mat(0xd8b24e,0.3,0.9,0.05)); shRim.rotation.y=Math.PI/2;
+  const shBoss=sph(0.19,0xf0d060,0.3,0.9,0.5); shBoss.position.x=0.14; // 바깥면 보스
+  const shCrossV=box(0.06,1.5,0.13,0xd8b24e,0.4,0.7); shCrossV.position.x=0.1;
+  const shCrossH=box(0.06,0.13,1.5,0xd8b24e,0.4,0.7); shCrossH.position.x=0.1;
+  shieldG.add(shBody,shRim,shBoss,shCrossV,shCrossH);
   // 검 (긴 롱소드) — 오른손
   const sword=new THREE.Group(); sword.position.set(0,-0.82,0.08);
   const pommel=sph(0.12,0xd8b24e,0.3,0.9); pommel.position.y=-0.34;
@@ -460,7 +461,7 @@ function makeRoman(){
     new THREE.MeshBasicMaterial({color:0xffd24a,transparent:true,opacity:0,blending:THREE.AdditiveBlending})); aura.position.y=2.7; g.add(aura);
   g.add(pelvis,torso,plate,abLine,skirt,neck,headG,AL.j,AR.j,LL.j,LR.j);
   Object.assign(p,{head:headG,jArmL:AL.j,jArmR:AR.j,jArmLF:AL.jf,jArmRF:AR.jf,
-    jLegL:LL.j,jLegR:LR.j,jLegLF:LL.jf,jLegRF:LR.jf,torso,sword,shieldMount,shieldBase:shieldMount.position.clone(),shieldBaseRot:shieldMount.rotation.clone(),blade,capeSegs,aura,strikeNode:tip});
+    jLegL:LL.j,jLegR:LR.j,jLegLF:LL.jf,jLegRF:LR.jf,torso,sword,shieldG,blade,capeSegs,aura,strikeNode:tip});
   return { group:g, parts:p, type:'roman' };
 }
 
@@ -494,8 +495,7 @@ class Combatant {
   reset(){ const p=this.parts;
     p.jArmL.rotation.set(0,0,0); p.jArmR.rotation.set(0,0,0); p.jArmLF.rotation.set(0,0,0); p.jArmRF.rotation.set(0,0,0);
     p.jLegL.rotation.set(0,0,0); p.jLegR.rotation.set(0,0,0); p.jLegLF.rotation.set(0,0,0); p.jLegRF.rotation.set(0,0,0);
-    p.head.rotation.set(0,0,0); this.g.rotation.z=0;
-    if(p.shieldMount){ p.shieldMount.position.copy(p.shieldBase); p.shieldMount.rotation.copy(p.shieldBaseRot); } }
+    p.head.rotation.set(0,0,0); this.g.rotation.z=0; }
 
   update(dt,foe){
     this.t+=dt; this.anim+=dt;
@@ -583,17 +583,16 @@ class Combatant {
     p.jArmL.rotation.x=-1.9; p.jArmLF.rotation.x=-1.6; p.jArmR.rotation.x=-1.9; p.jArmRF.rotation.x=-1.6;
     p.jLegL.rotation.x=0.5*k; p.jLegR.rotation.x=-0.2; }
   // ── 로마 전사 스킬 ──
-  poseShield(){ const p=this.parts; // 방패로 방어 (피해 감소) — 방패를 정면으로 들어올림
+  poseShield(){ const p=this.parts; // 방패로 방어 — 왼팔을 올려 방패를 얼굴 앞으로
     this.g.rotation.z=this.dir*0.12;
-    if(p.shieldMount) p.shieldMount.position.set(0.05,2.78,0.98);
-    p.jArmL.rotation.x=-1.05; p.jArmLF.rotation.x=-0.45; // 팔로 받침
+    p.jArmL.rotation.x=-1.5; p.jArmLF.rotation.x=-0.15;  // 팔 들어 방패 상승
     p.jArmR.rotation.x=-0.2; p.jArmR.rotation.z=-0.3;
     p.jLegL.rotation.x=0.25; p.jLegR.rotation.x=-0.2; }
   poseDash(foe,dt){ const p=this.parts; // 대시공격: 낮게 돌진 후 방패 밀치기+검 찌르기
     const charge=this.t<0.28;
     if(charge){ this.g.position.x += Math.sign(foe.x-this.x)*this.speed*3.0*dt; // 폭발적 전진
-      this.g.rotation.z=this.dir*0.2; if(p.shieldMount) p.shieldMount.position.set(0.05,2.5,1.15); // 방패 앞세움
-      p.jArmL.rotation.x=-1.0; p.jArmLF.rotation.x=-0.4;
+      this.g.rotation.z=this.dir*0.2;
+      p.jArmL.rotation.x=-1.25; p.jArmLF.rotation.x=-0.15; // 방패 앞세워 돌진
       p.jArmR.rotation.x=-2.2; p.jArmRF.rotation.x=-0.4; } // 검 뒤로 장전
     else { const k=Math.min(1,(this.t-0.28)/0.12); // 찌르기
       p.jArmR.rotation.x=-2.2+2.1*k; p.jArmRF.rotation.x=-0.3+1.3*k; // 앞으로 쭉
