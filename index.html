@@ -433,7 +433,7 @@ function makeRoman(){
   const handR=sph(0.17,skin); handR.position.y=-0.78; AR.jf.add(handR); // 검 쥐는 오른손
   const handL=sph(0.17,skin); handL.position.y=-0.78; AL.jf.add(handL); // 방패 잡는 왼손
   // 방패 (왼팔뚝에 장착 — 손에 쥔 채 팔과 함께 움직임. 원판 법선=팔뚝 로컬 X축이라 팔을 굽혀도 방향 유지)
-  const shieldG=new THREE.Group(); shieldG.position.set(0.02,-0.7,0.05); shieldG.rotation.set(0,-0.5,0); AL.jf.add(shieldG);
+  const shieldG=new THREE.Group(); shieldG.position.set(0.02,-0.7,0.05); shieldG.rotation.set(0,0,0); AL.jf.add(shieldG);
   const shBody=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,0.16,32), mat(0xc0392b,0.55,0.15));
   shBody.rotation.z=Math.PI/2; shBody.castShadow=true;                 // 원판 법선 = X축
   const shRim=new THREE.Mesh(new THREE.TorusGeometry(0.85,0.09,12,32), mat(0xd8b24e,0.3,0.9,0.05)); shRim.rotation.y=Math.PI/2;
@@ -441,8 +441,8 @@ function makeRoman(){
   const shCrossV=box(0.06,1.5,0.13,0xd8b24e,0.4,0.7); shCrossV.position.x=0.1;
   const shCrossH=box(0.06,0.13,1.5,0xd8b24e,0.4,0.7); shCrossH.position.x=0.1;
   shieldG.add(shBody,shRim,shBoss,shCrossV,shCrossH);
-  // 검 (긴 롱소드) — 오른손
-  const sword=new THREE.Group(); sword.position.set(0,-0.82,0.08);
+  // 검 (긴 롱소드) — 오른손. 90도로 눕혀 적을 겨눔
+  const sword=new THREE.Group(); sword.position.set(0,-0.82,0.08); sword.rotation.x=Math.PI/2;
   const pommel=sph(0.12,0xd8b24e,0.3,0.9); pommel.position.y=-0.34;
   const grip=cap(0.075,0.34,0x5a3a22); grip.position.y=-0.1;
   const guard=box(0.54,0.12,0.2,0xd8b24e,0.3,0.9); guard.position.y=0.14;
