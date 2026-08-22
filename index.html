@@ -704,6 +704,14 @@ function spawnMiss(wp,txt){ const v=wp.clone().project(camera); const el=documen
   el.style.color='#8fe3ff'; el.style.fontSize='30px'; UI.dmglayer.appendChild(el); setTimeout(()=>el.remove(),1000); }
 function shake(mag){ shakeT=0.35; shakeMag=mag; }
 
+/* ---- 카메라 시네마틱 연출 ---- */
+const camFx={zoom:0,dutch:0,focus:null,hold:0};
+let koT=0, cineAz=0;
+function camPunch(zoom,dutch,focusX,hold=0.4){ // 줌인+기울임+타깃 포커스
+  camFx.zoom=Math.max(camFx.zoom,zoom);
+  camFx.dutch=dutch*(Math.random()<0.5?1:-1);
+  camFx.focus=focusX; camFx.hold=Math.max(camFx.hold,hold); }
+
 // 스킬 칩 UI
 function buildSkillChips(c,container){ container.innerHTML='';
   c._chips={}; c.skillList.forEach(s=>{ const el=document.createElement('div');
@@ -762,17 +770,19 @@ function startSkill(self,foe,k){ self.t=0; self._struck=false; self._hitIdx=0;
                    self._rollDz=Math.random()<0.5?1:-1;            // 좌/우 랜덤 측면
                    Sound.whoosh(1.1); logMsg(`🤸 ${self.name} 옆구르기 회피!`); break;
     case 'dash':   self.state='dash';   self.cd.dash=5.2;   self.cooldown=1.2; self.empowered=self.rage>=100;
-                   if(self.empowered){ self.rage=0; announce('각성!','#ffe07a'); }
+                   if(self.empowered){ self.rage=0; announce('각성!','#ffe07a'); camPunch(0.65,0.07,self.x,0.6); }
                    Sound.whoosh(1.1); logMsg(`💨 ${self.name} 대시공격!${self.empowered?' (각성)':''}`); break;
     case 'dempsey':self.state='dempsey';self.cd.dempsey=6.0;self.cooldown=1.4; self.rage=0; Sound.special(1);
-                   announce('뎀프시롤!','#ff7a5a'); logMsg(`⚡ ${self.name} 뎀프시롤 발동!`); break;
+                   announce('뎀프시롤!','#ff7a5a'); logMsg(`⚡ ${self.name} 뎀프시롤 발동!`);
+                   camPunch(0.75,0.08,self.x,0.9); break;
   }
 }
 // ---- 피격 판정 (회피/방패 포함) ----
 function hitPos(self,foe){ const fp=foe.g.position.clone(); fp.y=2.9; fp.x+=self.dir*0.3; return fp; }
 function landHit(self,foe,dmg,crit,o={}){
   if(foe.invuln){ Sound.whoosh(0.85); foe.gainRageOnHit(9);
-    const dp=foe.g.position.clone(); dp.y=3.4; spawnMiss(dp,'MISS'); logMsg(`✨ ${foe.name} 위빙 회피!`); return 'dodge'; }
+    const dp=foe.g.position.clone(); dp.y=3.4; spawnMiss(dp,'MISS'); logMsg(`✨ ${foe.name} 위빙 회피!`);
+    camPunch(0.3,0.04,foe.x,0.3); return 'dodge'; }
   if(foe.state==='shield'){ const red=Math.max(1,Math.round(dmg*0.22)); const sp=self.strikeWorld();
     Sound.clang(1.1); slashArc(sp,0xfff0b0,1.1); burst(sp,0xfff0b0,16,0.9); shake(0.3);
     foe.hp=Math.max(0,foe.hp-red); foe.gainRageOnHit(9); self.gainRageOnHit(4); spawnDamage(sp,red,false);
@@ -783,6 +793,7 @@ function landHit(self,foe,dmg,crit,o={}){
   burst(fp, o.color||(crit?0xff3b2f:0xffbb44), o.special?46:(crit?30:18), o.special?2.2:(crit?1.6:1));
   shockRing(fp, crit?0xff5a4d:0xffffff, o.special?14:8); spawnDamage(fp,dmg,crit);
   shake(o.shake!=null?o.shake:(crit?1.0:0.5)); hitStop=o.hitStop!=null?o.hitStop:(crit?0.14:0.07);
+  camPunch(o.special?0.95:(crit?0.6:0.2), crit?0.07:0.02, fp.x, o.special?0.55:(crit?0.4:0.15)); // 임팩트 줌
   Sound.crowd(crit?1:0.5, crit?1.3:0.7); return 'hit';
 }
 function resolveBasic(self,foe){ if(self._struck || self.t<0.06) return; self._struck=true;
@@ -882,15 +893,25 @@ function loop(nowMs){ requestAnimationFrame(loop);
     composer.render(); return; }
   const cx=((fighter?fighter.x:0)+(roman?roman.x:0))/2;
   const gap=Math.abs((fighter?fighter.x:0)-(roman?roman.x:0));
-  const dist=Math.min(14.5, 10.5+gap*0.42), ry=6.2+orbit.tel*6;
-  const tx=Math.sin(orbit.az)*dist + cx*0.4*Math.cos(orbit.az);
-  const tz=Math.cos(orbit.az)*dist;
-  camera.position.x+=(tx-camera.position.x)*0.06;
-  camera.position.z+=(tz-camera.position.z)*0.05;
-  camera.position.y+=(ry-camera.position.y)*0.05;
+  // 시네마틱 상태: 홀드 끝나면 줌/기울임 감쇠, KO 땐 슬로우 오빗
+  if(camFx.hold>0) camFx.hold-=dt; else { camFx.zoom*=Math.max(0,1-dt*3.2); camFx.dutch*=Math.max(0,1-dt*3.2); }
+  if(koT>0){ koT-=dt; cineAz+=dt*0.4; } else cineAz*=Math.max(0,1-dt*1.2);
+  const zf=Math.min(1.2,camFx.zoom);
+  let lookX=cx*0.4, lookY=2.6;
+  if(zf>0.02 && camFx.focus!==null){ lookX+=(camFx.focus*0.55-lookX)*Math.min(1,zf)*0.6; lookY-=zf*0.7; }
+  const az=orbit.az+cineAz;
+  const dist=Math.min(14.5, 10.5+gap*0.42)-zf*4.5, ry=6.2+orbit.tel*6-zf*2.0;
+  const tx=Math.sin(az)*dist + lookX*Math.cos(az);
+  const tz=Math.cos(az)*dist;
+  camera.position.x+=(tx-camera.position.x)*(0.06+zf*0.1);
+  camera.position.z+=(tz-camera.position.z)*(0.05+zf*0.1);
+  camera.position.y+=(ry-camera.position.y)*(0.05+zf*0.08);
   if(shakeT>0){ shakeT-=dt; const s=shakeMag*(shakeT/0.35);
     camera.position.x+=(Math.random()-0.5)*s; camera.position.y+=(Math.random()-0.5)*s; }
-  camera.lookAt(cx*0.4,2.6,0);
+  camera.lookAt(lookX,lookY,0);
+  camera.rotation.z+=camFx.dutch;                                  // 더치 앵글(기울임)
+  const fovT=50-zf*7;                                              // FOV 펀치
+  if(Math.abs(camera.fov-fovT)>0.05){ camera.fov+=(fovT-camera.fov)*0.25; camera.updateProjectionMatrix(); }
   composer.render();
 }
 let crowdCheer=0.3;
@@ -899,6 +920,7 @@ requestAnimationFrame(loop);
 /* ============================================================ 8. 매치 ============================================================ */
 function startMatch(){ Sound.init(); Sound.resume(); Sound.bell(); Sound.crowd(1,1.6); crowdCheer=1;
   buildCombatants(); updateHP(); running=true; roundTimer=60; slowmo=1;
+  camFx.zoom=0; camFx.dutch=0; camFx.hold=0; koT=0; cineAz=0; camera.fov=50; camera.updateProjectionMatrix();
   UI.overlay.classList.add('hidden'); UI.startBtn.classList.add('hidden'); UI.againBtn.classList.add('hidden');
   UI.resultText.classList.add('hidden'); UI.title.classList.add('hidden');
   UI.hud.classList.remove('hidden'); UI.hint.classList.remove('hidden'); UI.log.innerHTML='';
@@ -907,7 +929,9 @@ function endMatch(timeout=false){ if(!running) return; running=false; crowdCheer
   Sound.gong(); Sound.crowd(1.2,2.0);
   let winner=null;
   if(timeout){ if(fighter.hp>roman.hp) winner=fighter; else if(roman.hp>fighter.hp) winner=roman; }
-  else { winner=fighter.hp<=0?roman:fighter; (fighter.hp<=0?fighter:roman).state='ko'; (fighter.hp<=0?fighter:roman).t=0; }
+  else { const loser=fighter.hp<=0?fighter:roman; winner=loser===fighter?roman:fighter;
+    loser.state='ko'; loser.t=0;
+    koT=1.9; hitStop=0.35; camPunch(0.95,0.1,loser.x,1.4); }       // KO 시네마틱: 프리즈+줌+슬로우 오빗
   const color=winner?(winner.side==='L'?'#ff5a4d':'#ffd35a'):'#fff';
   announce('K.O.','#ff3b2f');
   setTimeout(()=>{ UI.overlay.classList.remove('hidden'); UI.resultText.textContent=winner?`${winner.name} 승리!`:'무승부!';
