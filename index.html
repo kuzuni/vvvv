@@ -433,7 +433,7 @@ function makeRoman(){
   const handR=sph(0.17,skin); handR.position.y=-0.78; AR.jf.add(handR); // 검 쥐는 오른손
   const handL=sph(0.17,skin); handL.position.y=-0.78; AL.jf.add(handL); // 방패 잡는 왼손
   // 방패 (왼팔뚝에 장착 — 손에 쥔 채 팔과 함께 움직임. 원판 법선=팔뚝 로컬 X축이라 팔을 굽혀도 방향 유지)
-  const shieldG=new THREE.Group(); shieldG.position.set(0.02,-0.7,0.05); shieldG.rotation.set(0,0,0); AL.jf.add(shieldG);
+  const shieldG=new THREE.Group(); shieldG.position.set(0.02,-0.7,0.05); shieldG.rotation.set(0,0,-Math.PI/2); AL.jf.add(shieldG); // 옆으로 90도(적 방향)
   const shBody=new THREE.Mesh(new THREE.CylinderGeometry(0.85,0.85,0.16,32), mat(0xc0392b,0.55,0.15));
   shBody.rotation.z=Math.PI/2; shBody.castShadow=true;                 // 원판 법선 = X축
   const shRim=new THREE.Mesh(new THREE.TorusGeometry(0.85,0.09,12,32), mat(0xd8b24e,0.3,0.9,0.05)); shRim.rotation.y=Math.PI/2;
@@ -479,10 +479,10 @@ class Combatant {
     this.critChance=this.type==='roman'?0.18:0.28;
     this.prevX=opts.x; this.vx=0; this._lastStep=0; this.knock=0; this.currentMove=null; this._struck=false; this._blockDur=0;
     // 스킬 쿨다운 & 목록
-    this.cd = this.type==='fighter' ? {dempsey:0,liver:0,weave:0} : {shield:0,dash:0,kick:0};
+    this.cd = this.type==='fighter' ? {dempsey:0,liver:0,weave:0} : {shield:0,dash:0,roll:0};
     this.skillList = this.type==='fighter'
       ? [{k:'dempsey',n:'뎀프시롤',ult:true},{k:'liver',n:'리버샷'},{k:'weave',n:'위빙'}]
-      : [{k:'dash',n:'대시공격',ult:true},{k:'shield',n:'방패방어'},{k:'kick',n:'발차기'}];
+      : [{k:'dash',n:'대시공격',ult:true},{k:'shield',n:'방패방어'},{k:'roll',n:'옆구르기'}];
     this.invuln=false; this.empowered=false; this._hitIdx=0; this.stun=0;
   }
   get x(){ return this.g.position.x; }
@@ -514,7 +514,7 @@ class Combatant {
 
     if(this.state==='ko'){ this.reset(); const k=Math.min(1,this.t*1.5);
       this.g.rotation.z=this.dir*(-Math.PI/2*k); this.g.position.y=-Math.sin(k*Math.PI)*0.35; p.head.rotation.x=0.4*k; return; }
-    this.reset(); this.g.position.y=0; this.invuln=false;
+    this.reset(); this.g.position.y=0; this.g.position.z=0; this.g.rotation.x=0; this.invuln=false;
     switch(this.state){
       case 'idle': this.poseIdle(); break;
       case 'approach': this.poseWalk(); this.moveToward(foe,dt); break;
@@ -528,7 +528,7 @@ class Combatant {
       case 'dempsey': this.poseDempsey(foe,dt); break;
       case 'liver': this.poseLiver(foe); break;
       case 'dash': this.poseDash(foe,dt); break;
-      case 'kick': this.poseKick(foe); break;
+      case 'roll': this.poseRoll(dt,foe); break;
     }
   }
   poseIdle(intensity=1){ const p=this.parts, b=Math.sin(this.anim*2.4);
@@ -598,14 +598,14 @@ class Combatant {
       p.jArmR.rotation.x=-2.2+2.1*k; p.jArmRF.rotation.x=-0.3+1.3*k; // 앞으로 쭉
       p.jArmL.rotation.x=-1.1; p.jArmLF.rotation.x=-0.4; this.g.rotation.z=this.dir*0.1; }
     p.jLegL.rotation.x=0.4; p.jLegR.rotation.x=-0.3; this.faceTo(foe.x); }
-  poseKick(foe){ const p=this.parts; this.faceTo(foe.x); // 앞차기: 무릎 차올려 장전 → 정강이 앞(적 방향)으로 뻗기
-    p.jArmL.rotation.x=-1.0; p.jArmR.rotation.x=-0.6; p.jArmR.rotation.z=-0.3;
-    if(this.t<0.14){ const k=this.t/0.14; p.jLegR.rotation.x=-0.7*k; p.jLegRF.rotation.x=1.3*k; // 무릎 업
-      this.g.rotation.z=this.dir*0.1*k; }
-    else { const k=Math.min(1,(this.t-0.14)/0.12);
-      p.jLegR.rotation.x=-1.35*k;          // 허벅지 앞으로 (음수 = 적 방향)
-      p.jLegRF.rotation.x=1.3*(1-k);        // 정강이 쭉 폄
-      p.jLegL.rotation.x=0.18; this.g.rotation.z=this.dir*0.16*k; } }
+  poseRoll(dt,foe){ const p=this.parts; const k=Math.min(1,this.t/0.6); // 옆구르기 회피(무적)
+    this.invuln = this.t>0.05 && this.t<0.52;
+    this.g.position.z = Math.sin(k*Math.PI)*3.2;      // 옆(카메라 쪽)으로 굴렀다 복귀
+    this.g.position.y = Math.sin(k*Math.PI)*0.25;
+    this.g.rotation.x = -k*Math.PI*2;                 // 한 바퀴 구르기
+    p.jArmL.rotation.x=-2.3; p.jArmR.rotation.x=-2.3; // 몸 웅크림
+    p.jLegL.rotation.x=1.5; p.jLegLF.rotation.x=1.7; p.jLegR.rotation.x=1.5; p.jLegRF.rotation.x=1.7;
+    p.head.rotation.x=0.45; }
   poseStunned(dt){ const p=this.parts; // 기절(비틀)
     this.g.rotation.z=Math.sin(this.anim*7)*0.12; p.head.rotation.z=Math.sin(this.anim*6)*0.25; p.head.rotation.x=0.25;
     p.jArmL.rotation.x=-0.4; p.jArmR.rotation.x=-0.4; this.g.position.y=Math.abs(Math.sin(this.anim*4))*0.05; }
@@ -696,7 +696,7 @@ function buildSkillChips(c,container){ container.innerHTML='';
     el.className='skill-chip'+(s.ult?' ult':''); el.innerHTML=`<span class="cd"></span>${s.n}`;
     container.appendChild(el); c._chips[s.k]={el, cdbar:el.querySelector('.cd'), prevState:0}; }); }
 function updateSkills(c){ if(!c._chips) return;
-  const maxcd={dempsey:6,liver:4.6,weave:2.6,dash:5.2,shield:2.2,kick:3.6};
+  const maxcd={dempsey:6,liver:4.6,weave:2.6,dash:5.2,shield:2.2,roll:3.6};
   c.skillList.forEach(s=>{ const ch=c._chips[s.k]; const cd=c.cd[s.k]||0;
     ch.cdbar.style.width=(cd>0?(cd/maxcd[s.k])*100:0)+'%';
     const ready=cd<=0 && (!s.ult || c.rage>=100);
@@ -717,7 +717,10 @@ function decide(self,foe){
   // 반응 방어/회피
   if(foeThreat && dist<=self.reach+2.4){
     if(self.type==='fighter' && self.cd.weave<=0 && Math.random()<0.55){ startSkill(self,foe,'weave'); return; }
-    if(self.type==='roman' && self.cd.shield<=0 && Math.random()<0.6){ startSkill(self,foe,'shield'); return; }
+    if(self.type==='roman'){
+      if(self.cd.roll<=0 && Math.random()<0.4){ startSkill(self,foe,'roll'); return; }   // 옆구르기 회피
+      if(self.cd.shield<=0 && Math.random()<0.6){ startSkill(self,foe,'shield'); return; }
+    }
   }
   if(dist>self.reach){
     if(self.type==='roman' && self.cd.dash<=0 && dist<9 && (self.rage>=100||Math.random()<0.4)){ startSkill(self,foe,'dash'); return; }
@@ -730,7 +733,6 @@ function decide(self,foe){
     startBasic(self);
   } else {
     if(self.rage>=100 && self.cd.dash<=0){ startSkill(self,foe,'dash'); return; }
-    if(self.cd.kick<=0 && r<0.35){ startSkill(self,foe,'kick'); return; }
     startBasic(self);
   }
 }
@@ -742,7 +744,7 @@ function startSkill(self,foe,k){ self.t=0; self._struck=false; self._hitIdx=0;
     case 'shield': self.state='shield'; self.cd.shield=2.2; self._blockDur=0.55; self.cooldown=0.6; break;
     case 'liver':  self.state='liver';  self.cd.liver=4.6;  self.cooldown=1.0; Sound.whoosh(0.7);
                    logMsg(`${self.name} 리버샷 노림!`); break;
-    case 'kick':   self.state='kick';   self.cd.kick=3.6;   self.cooldown=1.0; Sound.whoosh(1.0); break;
+    case 'roll':   self.state='roll';   self.cd.roll=3.6;   self.cooldown=0.9; Sound.whoosh(1.1); logMsg(`🤸 ${self.name} 옆구르기 회피!`); break;
     case 'dash':   self.state='dash';   self.cd.dash=5.2;   self.cooldown=1.2; self.empowered=self.rage>=100;
                    if(self.empowered){ self.rage=0; announce('각성!','#ffe07a'); }
                    Sound.whoosh(1.1); logMsg(`💨 ${self.name} 대시공격!${self.empowered?' (각성)':''}`); break;
@@ -781,10 +783,6 @@ function doLiver(self,foe){ if(Math.abs(foe.x-self.x)>self.reach+0.6){ logMsg(`$
   const dmg=Math.round(self.dmgMax*1.5+Math.random()*6); const fp=hitPos(self,foe);
   if(landHit(self,foe,dmg,true,{color:0xff5a2a,stun:1.2,shake:1.2,hitStop:0.16})==='hit'){
     Sound.punch(1.3); slashArc(fp,0xff7a3a,0.85); logMsg(`💢 ${self.name} 리버샷! 간부 강타 (-${dmg})`); announce('LIVER BLOW!','#ff5a2a'); } }
-function doKick(self,foe){ if(Math.abs(foe.x-self.x)>self.reach+0.9){ logMsg(`${self.name} 발차기 빗나감!`); return; }
-  const dmg=Math.round(self.dmgMin*1.2+Math.random()*6);
-  if(landHit(self,foe,dmg,false,{color:0xffd0a0,knock:4.6,shake:0.8,hitStop:0.1})==='hit'){
-    Sound.punch(1.1); logMsg(`🦵 ${self.name} 발차기! 밀어내기 (-${dmg})`); } }
 function doDash(self,foe){ const emp=self.empowered; self.empowered=false;
   if(Math.abs(foe.x-self.x)>self.reach+1.3){ logMsg(`${self.name} 대시공격 빗나감!`); return; }
   const dmg=Math.round((emp?self.dmgMax*1.9:self.dmgMax*1.1)+Math.random()*6); const fp=hitPos(self,foe);
@@ -810,7 +808,7 @@ function advance(self,foe,dt){ self.cooldown=Math.max(0,self.cooldown-dt);
     case 'windup': if(self.t>=0.16){ self.state='attack'; self.t=0; self._struck=false; } break;
     case 'attack': resolveBasic(self,foe); if(self.t>=0.2){ self.state='recover'; self.t=0; } break;
     case 'liver': if(!self._struck && self.t>=0.14){ self._struck=true; doLiver(self,foe); } if(self.t>=0.44){ self.state='recover'; self.t=0; } break;
-    case 'kick': if(!self._struck && self.t>=0.26){ self._struck=true; doKick(self,foe); } if(self.t>=0.46){ self.state='recover'; self.t=0; } break;
+    case 'roll': if(self.t>=0.6){ self.state='recover'; self.t=0; } break;
     case 'dash': if(!self._struck && self.t>=0.40){ self._struck=true; doDash(self,foe); } if(self.t>=0.58){ self.state='recover'; self.t=0; } break;
     case 'dempsey': doDempsey(self,foe,dt); if(self.t>=1.0){ self.state='recover'; self.t=0; } break;
     case 'recover': if(self.t>=0.18){ self.state='idle'; self.t=0; } break;
